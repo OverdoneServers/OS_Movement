@@ -71,6 +71,7 @@ function InitHooks()
 
 
     local lastHeadPos = LocalPlayer():EyePos()
+    local lastEyeAng = Angle()
 
     StatefulHooks:Add("CalcView", module.HookPrefix .. "AccurateHeadPos", function(ply, pos, angles, fov)
         local headBone = ply:LookupBone("ValveBiped.Bip01_Head1")
@@ -87,8 +88,16 @@ function InitHooks()
         return {origin = pos, angles = angles, fov = fov}
     end)
 
+    local lagAmount = 0.1 -- Change this to control the amount of lag
+
     StatefulHooks:Add("CalcViewModelView", module.HookPrefix .. "AccurateHeadPos", function(wep, viewModel, oldEyePos, oldEyeAng, eyePos, eyeAng)
-        return lastHeadPos
+        local wantedAng = StatefulHooks.AllHooks["CalcView"].Result.angles
+
+        lastEyeAng.p = OverdoneServers.EaseFunctions:EaseOutCirc(RealFrameTime()*lagAmount, lastEyeAng.p, wantedAng.p)
+        lastEyeAng.y = OverdoneServers.EaseFunctions:EaseOutCirc(RealFrameTime()*lagAmount, lastEyeAng.y, wantedAng.y)
+        lastEyeAng.r = OverdoneServers.EaseFunctions:EaseOutCirc(RealFrameTime()*lagAmount, lastEyeAng.r, wantedAng.r)
+
+        return lastHeadPos, lastEyeAng
     end)
 end
 
