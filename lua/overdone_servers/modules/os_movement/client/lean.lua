@@ -89,14 +89,29 @@ function InitHooks()
     end)
 
     local lagAmount = 0.1 -- Change this to control the amount of lag
-
+    
+    local function NormalizeAngleDifference(angle1, angle2)
+        local difference = angle1 - angle2
+        if difference < -180 then
+            difference = difference + 360
+        elseif difference > 180 then
+            difference = difference - 360
+        end
+        return difference
+    end
+    
     StatefulHooks:Add("CalcViewModelView", module.HookPrefix .. "AccurateHeadPos", function(wep, viewModel, oldEyePos, oldEyeAng, eyePos, eyeAng)
         local wantedAng = StatefulHooks.AllHooks["CalcView"].Result.angles
-
-        lastEyeAng.p = OverdoneServers.EaseFunctions:EaseOutCirc(RealFrameTime()*lagAmount, lastEyeAng.p, wantedAng.p)
-        lastEyeAng.y = OverdoneServers.EaseFunctions:EaseOutCirc(RealFrameTime()*lagAmount, lastEyeAng.y, wantedAng.y)
-        lastEyeAng.r = OverdoneServers.EaseFunctions:EaseOutCirc(RealFrameTime()*lagAmount, lastEyeAng.r, wantedAng.r)
-
+    
+        -- Normalize angle differences
+        local normalizedPitch = NormalizeAngleDifference(wantedAng.p, lastEyeAng.p)
+        local normalizedYaw = NormalizeAngleDifference(wantedAng.y, lastEyeAng.y)
+        local normalizedRoll = NormalizeAngleDifference(wantedAng.r, lastEyeAng.r)
+    
+        lastEyeAng.p = OverdoneServers.EaseFunctions:EaseOutCirc(RealFrameTime()*lagAmount, lastEyeAng.p, lastEyeAng.p + normalizedPitch)
+        lastEyeAng.y = OverdoneServers.EaseFunctions:EaseOutCirc(RealFrameTime()*lagAmount, lastEyeAng.y, lastEyeAng.y + normalizedYaw)
+        lastEyeAng.r = OverdoneServers.EaseFunctions:EaseOutCirc(RealFrameTime()*lagAmount, lastEyeAng.r, lastEyeAng.r + normalizedRoll)
+    
         return lastHeadPos, lastEyeAng
     end)
 end
