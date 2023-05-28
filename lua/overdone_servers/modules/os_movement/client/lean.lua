@@ -2,6 +2,9 @@ local module = OverdoneServers:GetModule("os_movement")
 local OSMove = module.Data
 
 local StatefulHooks = OverdoneServers.StatefulHooks
+StatefulHooks:AddState("Aiming")
+StatefulHooks:AddState("Walking")
+StatefulHooks:EnableState("Walking")
 
 -- Initialize lean state
 OSMove.leanState = OSMove.leanState or 0 -- 0 = no lean, -1 = lean left, 1 = lean right
@@ -66,12 +69,13 @@ function InitHooks()
 
         ply:SetupBones()
 
-        return {origin = pos, angles = angles, fov = fov}
-    end)
-
+        return {origin = pos, angles = angles}
+    end, "Walking")
 
     local lastHeadPos = LocalPlayer():EyePos()
     local lastEyeAng = Angle()
+    local lastArmPos = LocalPlayer():EyePos()
+    local hasUpdatedThisFrame = false
 
     StatefulHooks:Add("CalcView", module.HookPrefix .. "AccurateHeadPos", function(ply, pos, angles, fov)
         local headBone = ply:LookupBone("ValveBiped.Bip01_Head1")
@@ -79,16 +83,16 @@ function InitHooks()
             local headPos, headAng = ply:GetBonePosition(headBone)
             if headPos then
                 pos = headPos + (ply:EyePos() - ply:GetPos()) / 12
-
-                pos = OverdoneServers.EaseFunctions:EaseInSine(100*RealFrameTime(), lastHeadPos, pos)
+                pos = Lerp(20*RealFrameTime(), lastHeadPos, pos)
                 lastHeadPos = pos
             end
         end
 
-        return {origin = pos, angles = angles, fov = fov}
-    end)
+        hasUpdatedThisFrame = true
+        return {origin = pos, angles = angles}
+    end, "Walking")
 
-    local lagAmount = 0.1 -- Change this to control the amount of lag
+    local lagAmount = 16 -- Change this to control the amount of lag
     
     local function NormalizeAngleDifference(angle1, angle2)
         local difference = angle1 - angle2
@@ -99,8 +103,29 @@ function InitHooks()
         end
         return difference
     end
+
+    local function ClampMagnitude(vector, maxLength)
+        local sqrMagnitude = vector:LengthSqr()
+        if sqrMagnitude > maxLength * maxLength then
+            local mag = math.sqrt(sqrMagnitude)
+            vector.x = vector.x / mag * maxLength
+            vector.y = vector.y / mag * maxLength
+            vector.z = vector.z / mag * maxLength
+        end
+        return vector
+    end
     
+    local armVelocity = Vector(0,0,0)
+
+    local lastEyePos = LocalPlayer():EyePos()
     StatefulHooks:Add("CalcViewModelView", module.HookPrefix .. "AccurateHeadPos", function(wep, viewModel, oldEyePos, oldEyeAng, eyePos, eyeAng)
+        if not hasUpdatedThisFrame then
+            return nil
+        end
+
+        hasUpdatedThisFrame = false
+
+        local wantedPos = StatefulHooks.AllHooks["CalcView"].Result.origin
         local wantedAng = StatefulHooks.AllHooks["CalcView"].Result.angles
     
         -- Normalize angle differences
@@ -108,19 +133,26 @@ function InitHooks()
         local normalizedYaw = NormalizeAngleDifference(wantedAng.y, lastEyeAng.y)
         local normalizedRoll = NormalizeAngleDifference(wantedAng.r, lastEyeAng.r)
     
-        lastEyeAng.p = OverdoneServers.EaseFunctions:EaseOutCirc(RealFrameTime()*lagAmount, lastEyeAng.p, lastEyeAng.p + normalizedPitch)
-        lastEyeAng.y = OverdoneServers.EaseFunctions:EaseOutCirc(RealFrameTime()*lagAmount, lastEyeAng.y, lastEyeAng.y + normalizedYaw)
-        lastEyeAng.r = OverdoneServers.EaseFunctions:EaseOutCirc(RealFrameTime()*lagAmount, lastEyeAng.r, lastEyeAng.r + normalizedRoll)
-    
-        return lastHeadPos, lastEyeAng
-    end)
+        lastEyeAng.p = Lerp(RealFrameTime()*lagAmount, lastEyeAng.p, lastEyeAng.p + normalizedPitch)
+        lastEyeAng.y = Lerp(RealFrameTime()*lagAmount, lastEyeAng.y, lastEyeAng.y + normalizedYaw)
+        lastEyeAng.r = Lerp(RealFrameTime()*lagAmount, lastEyeAng.r, lastEyeAng.r + normalizedRoll)
+        
+        -- move the wantedPos forward
+        wantedPos = wantedPos + lastEyeAng:Forward() * 4
+        wantedPos = wantedPos + lastEyeAng:Right() * -1
+
+        lastArmPos, armVelocity = OverdoneServers.EaseFunctions:SmoothDamp(lastArmPos, wantedPos, armVelocity, 0.015, math.huge, RealFrameTime())
+        
+        return lastArmPos, lastEyeAng
+    end, "Walking")
+
 end
 
 module:HookAdd("OverdoneServers:PlayerReady", "InitHooks", function(ply)
     InitHooks()
 end)
 
--- InitHooks() -- Remove this
+InitHooks() -- Remove this
 
 
 -- StatefulHooks:Remove("CalcView", module.HookPrefix .. "LeanView")
@@ -168,4 +200,16 @@ module:HookAdd("EntityFireBullets", "AccurateHeadPos", function(ply, data)
     ply:FireBullets(data)
     justFired = false
     return false
+end)
+
+module:HookAdd("PlayerButtonDown", "DetectAimingStart", function(ply, button)
+    if button == MOUSE_RIGHT then
+        StatefulHooks:DisableState("Walking")
+    end
+end)
+
+module:HookAdd("PlayerButtonUp", "DetectAimingEnd", function(ply, button)
+    if button == MOUSE_RIGHT then
+        StatefulHooks:EnableState("Walking")
+    end
 end)
