@@ -6,6 +6,7 @@ MODULE.DataToLoad = {
     Server = {
         "lean.lua",
         "idle.lua",
+        "look_around.lua"
     },
     Shared = {
         "lean.lua",
@@ -14,6 +15,7 @@ MODULE.DataToLoad = {
     Client = {
         "lean.lua",
         "idle.lua",
+        "look_around.lua"
     }
 }
 
