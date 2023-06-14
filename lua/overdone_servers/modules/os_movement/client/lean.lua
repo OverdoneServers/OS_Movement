@@ -1,7 +1,9 @@
 local module = OverdoneServers:GetModule("os_movement")
 local OSMove = module.Data
 
-local StatefulHooks = OverdoneServers.StatefulHooks
+local StatefulHooks = OverdoneServers:GetLibrary("stateful_hooks")
+local Easing = OverdoneServers:GetLibrary("easing")
+
 StatefulHooks:AddState("Aiming")
 StatefulHooks:AddState("Walking")
 StatefulHooks:EnableState("Walking")
@@ -56,7 +58,7 @@ function InitHooks()
         local timeElapsed = CurTime() - OSMove.startTime
         if timeElapsed <= leanTime then
             local t = timeElapsed / leanTime -- t will range from 0 to 1 over the duration of the animation
-            rollAngle = OverdoneServers.EaseFunctions:EaseInOutSine(t, OSMove.startLeanRollAngle, wantedLean)
+            rollAngle = Lerp(math.ease.InOutSine(t), OSMove.startLeanRollAngle, wantedLean)
         else
             rollAngle = wantedLean
             UpdateLeanState = false
@@ -90,7 +92,7 @@ function InitHooks()
 
         hasUpdatedThisFrame = true
         return {origin = pos, angles = angles}
-    end, "Walking")
+    end, {"Walking"})
 
     local lagAmount = 16 -- Change this to control the amount of lag
     
@@ -125,8 +127,8 @@ function InitHooks()
 
         hasUpdatedThisFrame = false
 
-        local wantedPos = StatefulHooks.AllHooks["CalcView"].Result.origin
-        local wantedAng = StatefulHooks.AllHooks["CalcView"].Result.angles
+        local wantedPos = StatefulHooks:GetResult("CalcView").origin
+        local wantedAng = StatefulHooks:GetResult("CalcView").angles
     
         -- Normalize angle differences
         local normalizedPitch = NormalizeAngleDifference(wantedAng.p, lastEyeAng.p)
@@ -141,7 +143,7 @@ function InitHooks()
         wantedPos = wantedPos + lastEyeAng:Forward() * 4
         wantedPos = wantedPos + lastEyeAng:Right() * -1
 
-        lastArmPos, armVelocity = OverdoneServers.EaseFunctions:SmoothDamp(lastArmPos, wantedPos, armVelocity, 0.015, math.huge, RealFrameTime())
+        lastArmPos, armVelocity = Easing:SmoothDamp(lastArmPos, wantedPos, armVelocity, 0.015, math.huge, RealFrameTime())
         
         return lastArmPos, lastEyeAng
     end, "Walking")
@@ -152,7 +154,7 @@ module:HookAdd("OverdoneServers:PlayerReady", "InitHooks", function(ply)
     InitHooks()
 end)
 
-InitHooks() -- Remove this
+-- InitHooks() -- Remove this
 
 
 -- StatefulHooks:Remove("CalcView", module.HookPrefix .. "LeanView")
@@ -166,7 +168,7 @@ InitHooks() -- Remove this
 -- local lastCrosshairPos = {x = screenHalfWidth, y = screenHalfHeight}
 
 -- module:HookAdd("HUDPaint", "Crosshair", function()
---     local lastView = StatefulHooks.AllHooks["CalcView"].Result
+--     local lastView = StatefulHooks:GetResult("CalcView")
 --     local lastViewPos = lastView.origin
 --     local lastViewAngles = lastView.angles
 
@@ -196,7 +198,7 @@ local justFired = false
 module:HookAdd("EntityFireBullets", "AccurateHeadPos", function(ply, data)
     if (justFired) then return end
     justFired = true
-    data.Src = StatefulHooks.AllHooks["CalcView"].Result.origin
+    data.Src = StatefulHooks:GetResult("CalcView").origin
     ply:FireBullets(data)
     justFired = false
     return false

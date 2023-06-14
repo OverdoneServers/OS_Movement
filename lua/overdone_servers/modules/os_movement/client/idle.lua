@@ -1,8 +1,7 @@
 local module = OverdoneServers:GetModule("os_movement")
 local OSMove = module.Data
 
-local StatefulHooks = OverdoneServers.StatefulHooks
-local PerlinNoise = OverdoneServers.PerlinNoise
+local StatefulHooks = OverdoneServers:GetLibrary("stateful_hooks")
 
 StatefulHooks:AddState("Idle")
 
